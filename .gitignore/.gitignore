@@ -1,0 +1,154 @@
+//Read multiple Excel file with many sheets, can only extract
+//the Excel file(sheet) with keywords "Remarks" or "remarks"
+//and copy those Excel file to another directory with corresponding 
+//folder.
+//Using programming C#
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Data;
+using System.Data.OleDb;
+using System.Data.SqlClient;
+using System.IO;
+
+namespace ConsoleApplication4
+{
+    class Program
+    {
+        static int control = 0;
+        static void Main(string[] args)
+        {
+            string str = "C:\\Users\\T0191203\\Desktop\\test";
+            if (File.Exists(str))
+            {
+                ProcessFile(str);
+            }
+            else if (Directory.Exists(str)){
+                ProcessDirectory(str);
+            }
+            else {
+                Console.WriteLine("nothing");
+            }
+            Console.ReadKey();
+        }
+        public static void ProcessFile(string path)
+        {
+            int global = 0;
+            string destin = "D:\\xia\\";
+            string connectionString = GetConnectionString(path);
+            DataSet ds = new DataSet();
+            //spilt to find the folder name
+            string[] tokens = path.Split('\\');
+            //Got the file name
+            string newstr = tokens[5];
+            //to append the string
+            destin = destin + newstr + "\\";
+            using (OleDbConnection conn = new OleDbConnection(connectionString))
+            {
+                conn.Open();
+                OleDbCommand cmd = new OleDbCommand();
+                cmd.Connection = conn;
+                // Get all Sheets from Excel File
+                DataTable dtSheet = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
+                // Loop through all Sheets to get data
+                foreach (DataRow dr in dtSheet.Rows)
+                {
+                    string sheetName = dr["TABLE_NAME"].ToString();
+                    if (!sheetName.EndsWith("$"))
+                        continue;
+                    // Get all rows from the Sheet
+                    cmd.CommandText = "SELECT * FROM [" + sheetName + "]";
+                    DataTable dt = new DataTable();
+                    dt.TableName = sheetName;
+                    if (dt.TableName == "Remarks$" || dt.TableName == "remarks$")
+                    {
+                        global++;
+                        Directory.CreateDirectory(destin);
+                        File.Copy(path, destin + Path.GetFileName(path));
+                    }
+                }
+                if(global == 0)
+                {
+                    Directory.CreateDirectory(destin);
+                }
+                cmd = null;
+                conn.Close();
+                conn.Dispose();
+            }
+        }
+        public static void ProcessDirectory(string targetDirectory)
+        {
+            // Process the list of files found in the directory.
+            string[] fileEntries = Directory.GetFiles(targetDirectory);
+            if (fileEntries.Count() == 0 && control == 1)
+            {
+                string destin = "D:\\xia\\";
+                string[] tokens = targetDirectory.Split('\\');
+                //Got the file name
+                string newstr = tokens[5];
+                //to append the string
+                destin = destin + newstr + "\\";
+                Directory.CreateDirectory(destin);
+            }
+            control = 1;
+            foreach (string fileName in fileEntries)
+            {
+                ProcessFile(fileName);
+            }
+            // Recurse into subdirectories of this directory.
+            string[] subdirectoryEntries = Directory.GetDirectories(targetDirectory);
+            foreach (string subdirectory in subdirectoryEntries)
+            {
+                ProcessDirectory(subdirectory);
+            }
+        }
+        private static string GetConnectionString(string file)
+        {
+            Dictionary<string, string> props = new Dictionary<string, string>();
+            string extension = file.Split('.').Last();
+            //if file type is "xls"
+            if (extension == "xls" || extension == "XLS")
+            {
+                //Excel 2003 and Older
+                props["Provider"] = "Microsoft.ACE.OLEDB.12.0";
+                props["Extended Properties"] = "Excel 8.0";
+            }
+            //if file type is xlsx
+            else if (extension == "xlsx" || extension == "XLSX")
+            {
+                //Excel 2007, 2010, 2012, 2013
+                props["Provider"] = "Microsoft.ACE.OLEDB.12.0;";
+                props["Extended Properties"] = "Excel 12.0 Xml";
+            }
+            //if file type is xlsm
+            else if (extension == "xlsm" || extension == "XLSM")
+            {
+                props["Provider"] = "Microsoft.ACE.OLEDB.12.0;";
+                props["Extended Properties"] = "Excel 12.0 Macro";
+            }
+            else if(extension == "xlsb" || extension == "XLSB")
+            {
+                props["Provider"] = "Microsoft.ACE.OLEDB.12.0;";
+                props["Extended Properties"] = "Excel 12.0 XML";
+            }
+            else
+            {
+                throw new Exception(string.Format("error file: {0}", file));
+            }
+            props["Data Source"] = file;
+            StringBuilder sb = new StringBuilder();
+            foreach (KeyValuePair<string, string> prop in props)
+            {
+                sb.Append(prop.Key);
+                sb.Append('=');
+                sb.Append(prop.Value);
+                sb.Append(';');
+            }
+            //free the dictionary
+            props = null;
+            //return back the string
+            return sb.ToString();
+        }
+    }
+}
